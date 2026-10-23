@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en-IN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Orders | Lal Colony General Store</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fbf7ee;color:#2a2118;font:16px/1.5 Inter,Arial,sans-serif}
+header{background:#2a2118;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0}
+.w{max-width:900px;margin:auto;padding:16px}
+input,select,button{font:inherit;padding:11px 14px;border-radius:10px;border:1px solid #e8dec7;background:#fffdf8;color:#2a2118}
+button{background:#8b4a2b;color:#fff;border:0;font-weight:600;cursor:pointer}
+.o{background:#fffdf8;border:1px solid #e8dec7;border-radius:16px;padding:16px;margin-bottom:14px}
+.o.new{border:2px solid #8b4a2b}
+.h{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+.m{color:#7a6e5d;font-size:14px}a{color:#8b4a2b;font-weight:600}
+ul{margin:8px 0;padding-left:20px}.t{font-weight:700;font-size:18px}
+.f{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.f button{background:#fffdf8;color:#2a2118;border:1px solid #e8dec7}.f button.on{background:#2a2118;color:#fff}
+</style></head><body>
+<header><b>Orders · Lal Colony General Store</b><span id="st" class="m" style="color:#efe6d2"></span></header>
+<div class="w" id="app"></div>
+<script>
+var TOK="",seen=null,flt="All",orders=[];
+try{TOK=sessionStorage.getItem("adm")||""}catch(e){}
+var $=function(i){return document.getElementById(i)};
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function login(){$("app").innerHTML='<p>Enter admin password</p><input id="pw" type="password" placeholder="Password"> <button onclick="doLogin()">Login</button><p id="e" style="color:#b00"></p>'}
+function doLogin(){fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:$("pw").value})}).then(function(r){return r.json()}).then(function(j){if(j.token){TOK=j.token;try{sessionStorage.setItem("adm",TOK)}catch(e){}load()}else $("e").textContent=j.error})}
+function beep(){try{var c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();o.stop(c.currentTime+.4)}catch(e){}}
+function load(){fetch("/api/admin/orders",{headers:{Authorization:"Bearer "+TOK}}).then(function(r){if(r.status==401){TOK="";login();return null}return r.json()}).then(function(j){if(!j)return;orders=j.orders;if(seen!==null&&orders.length>seen)beep();seen=orders.length;draw()}).catch(function(){$("st").textContent="Offline"})}
+function setS(id,s){fetch("/api/admin/status",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+TOK},body:JSON.stringify({id:id,status:s})}).then(load)}
+function draw(){
+  var S=["All","New","Packed","Out for delivery","Delivered","Cancelled"],nw=orders.filter(function(o){return o.status=="New"}).length;
+  document.title=(nw?"("+nw+") ":"")+"Orders | Lal Colony";$("st").textContent=nw+" new";
+  var h='<div class="f">'+S.map(function(s){return'<button class="'+(s==flt?"on":"")+'" onclick="flt=\''+s+'\';draw()">'+s+'</button>'}).join("")+'</div>';
+  var l=orders.filter(function(o){return flt=="All"||o.status==flt});
+  if(!l.length)h+='<p class="m">No orders yet.</p>';
+  h+=l.map(function(o){
+    return'<div class="o '+(o.status=="New"?"new":"")+'"><div class="h"><b>'+esc(o.id)+'</b><span class="m">'+new Date(o.time).toLocaleString("en-IN")+'</span></div>'+
+    '<div><b>'+esc(o.name)+'</b> · <a href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a></div>'+
+    '<ul>'+o.items.map(function(i){return'<li>'+esc(i.name)+' ('+esc(i.unit)+') × '+i.qty+' = ₹'+i.price*i.qty+'</li>'}).join("")+'</ul>'+
+    '<div class="t">Total ₹'+o.total+' <span class="m">· '+esc(o.payment)+'</span></div>'+
+    '<p>📍 '+esc(o.address)+(o.landmark?'<br>Landmark: '+esc(o.landmark):'')+(o.location?'<br><a target="_blank" rel="noopener" href="'+esc(o.location)+'">Open exact location in Maps ↗</a>':'')+'</p>'+
+    '<select onchange="setS(\''+o.id+'\',this.value)">'+S.slice(1).map(function(s){return'<option'+(s==o.status?" selected":"")+'>'+s+'</option>'}).join("")+'</select>'+
+    ' <a target="_blank" rel="noopener" href="https://wa.me/91'+esc(o.phone)+'">WhatsApp customer</a></div>'}).join("");
+  $("app").innerHTML=h;
+}
+if(TOK)load();else login();
+setInterval(function(){if(TOK)load()},15000);
+</script></body></html>
